@@ -232,7 +232,7 @@ def generate_csv_in_app(api_key: str | None = None,
         "__name__": "cap_mod_sandbox",
         "__builtins__": builtins.__dict__,
         "math": math, "time": time, "json": json, "datetime": datetime,
-        "pd": pd,  # 很多函式直接用 pd
+        "pd": pd,
         "os": os,
     })
 
@@ -313,7 +313,7 @@ with st.expander("Settings", expanded=True):
             st.write("Generate a CSV in-app and load it directly.")
             gen_now = st.button("Generate CSV now", type="primary", use_container_width=False)
             if gen_now:
-                df_gen = generate_csv_in_app(st.session_state.api_key or None, limit_stocks=50)
+                df_gen = generate_csv_in_app(st.session_state.api_key or None, limit_stocks=20)
 
                 st.session_state.generated_df = df_gen
 
@@ -322,22 +322,18 @@ with st.expander("Settings", expanded=True):
         generated_df = st.session_state.get("generated_df", None)
 
 # ---------------------- 資料載入邏輯 ----------------------
-# 若已生成資料 → 優先使用
 if generated_df is not None:
     df = generated_df
-
 else:
     if data_file is not None:
         df = load_dataframe(None, data_file)
     else:
         df = None
-
-# 若沒有資料則停止
 if df is None:
     st.info("Please upload a file or generate CSV before proceeding.")
     st.stop()
 
-# 預覽
+# preview
 st.write("### Raw Data Preview")
 st.write(f"total {len(df)}")
 st.dataframe(df.head(100), use_container_width=True)
@@ -411,7 +407,7 @@ with st.expander("Column Mapping (manually adjust if auto-detection is incorrect
                 )
 
     # ----------------------------------------------------
-    # 變數回寫邏輯 (Read-back Logic) - 保持原本的邏輯但更簡潔
+    # Read-back Logic
     # ----------------------------------------------------
     div_gt_eps_col = None if candidates["Div > EPS?"] == "<Auto-detect>" else candidates["Div > EPS?"]
     mcap_col = None if candidates["Market Cap"] == "<Auto-detect>" else candidates["Market Cap"]
@@ -444,7 +440,6 @@ with st.container(border=True):
         
     # ---- 如果上一輪按了「Load Preset」，在畫任何 widget 之前先套用預設 ----
     if st.session_state.get("apply_filter_preset", False):
-        # 這裡填你要的一鍵預設組合
         st.session_state["mcap_choice"]        = ["Large", "Mega"]
         st.session_state["status_choice"]      = ["BUY"]
 
@@ -473,7 +468,6 @@ with st.container(border=True):
         ticker_col = _find_col(df, ["ticker", "symbol", "symbols"])
 
     if ticker_col:
-        # Collect all tickers (uppercase for consistency)
         all_tickers = sorted(
             pd.Series(
                 df[ticker_col].astype(str).str.strip().str.upper().unique()).dropna())
@@ -513,13 +507,25 @@ with st.container(border=True):
         mcap_choice = st.multiselect("Market Cap（Multiple Choice）",["Mega", "Large", "Mid", "Small", "Micro","Nano"],
                                      default=[],key="mcap_choice")
 
-    # Volume (prev day)
+     # Volume (prev day)
     with col3:
         vol_col = _find_col_by_keywords(df, ["volume", ("prev day", "prev_day", "previous")])
         if vol_col:
             vol_series = pd.to_numeric(df[vol_col], errors="coerce")
-            vol_min_value = max(0, int(np.nanmin(vol_series)))
-            vol_max_value = max(vol_min_value, int(np.nanmax(vol_series)))
+            # volume series 最小值
+            _raw_min = np.nanmin(vol_series)
+            if np.isnan(_raw_min):
+                vol_min_value = 0
+            else:
+                vol_min_value = max(0, int(_raw_min))
+
+            # volume series 最大值
+            _raw_max = np.nanmax(vol_series)
+            if np.isnan(_raw_max):
+                vol_max_value = 100000000000000   # 或者你想用 1、100、其他預設
+            else:
+                vol_max_value = int(_raw_max)
+
             volume_min = st.number_input( "Average Volume (10days) Minimum Threshold",
                 min_value=0, max_value=vol_max_value, value=st.session_state.get("volume_min", 0),step=1000,key="volume_min",
                 help=f"Enter minimum volume threshold (0 = disable filter). Data range: {vol_min_value:,} to {vol_max_value:,}")
@@ -890,7 +896,7 @@ def _max_close_between(px_df: pd.DataFrame, start_dt: pd.Timestamp, end_dt: pd.T
 
 
 # =========================================
-# Interactive MACD chart (dynamic loader for macdchart.py)
+# Interactive MACD chart (dynamic loader for interactivemacd_stock_chart.py)
 # - 放在本檔最後面
 # - 需求：st.session_state["ticker_multi_input"]、st.session_state["api_key"] 或 POLYGON_API_KEY
 # =========================================
@@ -1029,7 +1035,7 @@ with st.expander("Interactive MACD Chart", expanded=False):
         except NameError:
             # 某些環境可能沒有 __file__
             current_dir = os.getcwd()
-        chart_path = os.path.join(current_dir, "macdchart.py")
+        chart_path = os.path.join(current_dir, "chart.py")
         if not os.path.exists(chart_path):
             st.error(f"File not found: {chart_path}")
             st.stop()
