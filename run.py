@@ -191,7 +191,7 @@ def generate_csv_in_app(api_key: str | None = None,
 
     # 2) capstone 檔案路徑（保持與目前檔案同資料夾）
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    CAP_PATH = os.path.join(current_dir, "andy.py")
+    CAP_PATH = os.path.join(current_dir, "generatecsv.py")
 
 
     # 3) 讀取 capstone 原始碼，並在執行前移除底部自動執行區塊
@@ -1029,7 +1029,7 @@ with st.expander("Interactive MACD Chart", expanded=False):
         except NameError:
             # 某些環境可能沒有 __file__
             current_dir = os.getcwd()
-        chart_path = os.path.join(current_dir, "chart.py")
+        chart_path = os.path.join(current_dir, "macdchart.py")
         if not os.path.exists(chart_path):
             st.error(f"File not found: {chart_path}")
             st.stop()
