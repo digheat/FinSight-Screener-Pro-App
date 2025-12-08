@@ -56,19 +56,19 @@ def load_dataframe(file_path: str | None, uploaded_file) -> pd.DataFrame | None:
             elif name.endswith((".xlsx", ".xls")):
                 return pd.read_excel(uploaded_file)
             else:
-                st.warning("只支援 .csv/.xlsx/.xls。")
+                st.warning("translated")
                 return None
         if file_path:
             lp = file_path.strip()
             if not os.path.exists(lp):
-                st.warning(f"找不到檔案：{lp}")
+                st.warning(f"translated")
                 return None
             if lp.lower().endswith(".csv"):
                 return pd.read_csv(lp)
             elif lp.lower().endswith((".xlsx", ".xls")):
                 return pd.read_excel(lp)
             else:
-                st.warning("只支援 .csv/.xlsx/.xls。")
+                st.warning("translated")
                 return None
     except Exception as e:
         st.error(f"reading error：{e}")
@@ -77,20 +77,17 @@ def load_dataframe(file_path: str | None, uploaded_file) -> pd.DataFrame | None:
 
 
 def coerce_bool(series: pd.Series) -> pd.Series:
-    """
-    將 bool / 整數 / 'true'/'false'/'yes'/'no' 等統一轉成 pandas BooleanDtype。
-    """
-    # 已經是 bool
+    # translated
     if pd.api.types.is_bool_dtype(series):
         return series.astype("boolean")
 
-    # 數值型：0 -> False，其它非空 -> True
+    # translated
     if pd.api.types.is_numeric_dtype(series):
         return series.map(
             lambda x: (pd.notna(x) and float(x) != 0) if pd.notna(x) else pd.NA
         ).astype("boolean")
 
-    # 文字型：常見 true/false 字串
+    # translated
     s = series.astype(str).str.strip().str.lower()
     true_set = {"true", "1", "yes", "y", "t"}
     false_set = {"false", "0", "no", "n", "f", ""}
@@ -99,10 +96,6 @@ def coerce_bool(series: pd.Series) -> pd.Series:
 
 
 def _find_col(df: pd.DataFrame, candidates) -> str | None:
-    """
-    在 df 中用不分大小寫方式尋找欄位名，回傳實際欄位名或 None。
-    candidates 可以是單一字串或字串列表。
-    """
     if isinstance(candidates, str):
         candidates = [candidates]
     lower_map = {c.lower(): c for c in df.columns}
@@ -174,37 +167,31 @@ if not st.session_state.started:
             st.session_state.started = True
     st.stop()
 
-# ---- 可選：快取資料生成 ----
+# translated
 def generate_csv_in_app(api_key: str | None = None,
                         limit_stocks: int | None = None) -> pd.DataFrame:
-    """
-    作法一（動態載入 capstone 腳本）：
-    - 不改 capstone 原始檔，僅在此函式內動態載入其函式定義，並呼叫 run_full_market_inputs_with_reason(...)
-    - 自動跳過 capstone 底部的「# 執行」示範區塊（避免 import 時就直接跑）
-    - 維持原 UI 流程與下載邏輯：回傳 DataFrame，並同時寫出 full_market_inputs_with_reason.csv
-    """
     import os, types, inspect, pandas as pd
 
-    # 1) 將 UI 輸入的 API Key 傳遞給 capstone 程式
+    # translated
     if api_key:
         os.environ["POLYGON_API_KEY"] = api_key
 
-    # 2) capstone 檔案路徑（保持與目前檔案同資料夾）
+    # translated
     current_dir = os.path.dirname(os.path.abspath(__file__))
     CAP_PATH = os.path.join(current_dir, "generatecsv.py")
 
 
-    # 3) 讀取 capstone 原始碼，並在執行前移除底部自動執行區塊
-    #    原始檔底部通常有：
-    #      # 執行
+    # translated
+    # translated
+    # translated
     #      df_all = run_full_market_inputs_with_reason(...)
     #      display(df_all.head(30))
-    #      print("總列數：", len(df_all))
+    # translated
     with open(CAP_PATH, "r", encoding="utf-8", errors="replace") as f:
         src = f.read()
 
-    # 優先用標記「# 執行」來截斷
-    cut_markers = ["\n# 執行", "\n#\u57F7\u884C", "\n# Execute", "\n# RUN", "\n# run"]
+    # translated
+    cut_markers = ["\n# translated
     cut_pos = -1
     for mk in cut_markers:
         pos = src.find(mk)
@@ -212,20 +199,20 @@ def generate_csv_in_app(api_key: str | None = None,
             cut_pos = pos
             break
 
-    # 若找不到標記，再嘗試偵測常見的呼叫行
+    # translated
     if cut_pos == -1:
         import re
         m = re.search(r'^\s*df_all\s*=\s*run_full_market_inputs_with_reason\s*\(', src, re.M)
         if m:
             cut_pos = m.start()
 
-    # 真的都找不到就整檔執行（但一般會找到；若整檔執行，capstone 會直接跑，可能花較久）
+    # translated
     safe_src = src if cut_pos == -1 else src[:cut_pos]
 
-    # 4) 建立一個臨時模組，僅注入「函式與常數定義」進來
+    # translated
     cap_mod = types.ModuleType("cap_mod_sandbox")
     cap_mod.__file__ = CAP_PATH
-    # 給常見的基本匯入，避免原檔案依賴這些名稱卻未顯式 import
+    # translated
     import math, time, json, datetime
     import builtins
     cap_mod.__dict__.update({
@@ -237,56 +224,56 @@ def generate_csv_in_app(api_key: str | None = None,
     })
 
     code = compile(safe_src, CAP_PATH, "exec")
-    exec(code, cap_mod.__dict__)  # 這裡不會跑到底部示範區塊
+    exec(code, cap_mod.__dict__)  # translated
 
-    # 5) 取得 run_full_market_inputs_with_reason(...)，並以相容方式傳參
+    # translated
     if not hasattr(cap_mod, "run_full_market_inputs_with_reason"):
-        raise RuntimeError("capstone 檔案中找不到 run_full_market_inputs_with_reason(...)")
+        raise RuntimeError("translated")
 
     run_fn = cap_mod.run_full_market_inputs_with_reason
     sig = inspect.signature(run_fn)
 
-    # 基本參數：輸出檔名與 share classes 過濾
+    # translated
     kwargs = {}
     if "outfile" in sig.parameters:
         kwargs["outfile"] = "full_market_inputs_with_reason.csv"
     if "skip_share_classes" in sig.parameters:
         kwargs["skip_share_classes"] = True
 
-    # 速度與切檔設定（若 capstone 定義了參數，才帶）
+    # translated
     if "max_workers" in sig.parameters:
-        # 若 capstone 內有 MAX_WORKERS 常數就沿用，否則給一個合理值
+        # translated
         max_workers = getattr(cap_mod, "MAX_WORKERS", 32)
         kwargs["max_workers"] = max_workers
     if "part_every" in sig.parameters:
         kwargs["part_every"] = 1500
 
-    # 限縮掃描股票數量（若 capstone 支援 limit 參數才帶）
+    # translated
     if "limit" in sig.parameters and limit_stocks:
         kwargs["limit"] = int(limit_stocks)
 
-    # 6) 執行 capstone 的主流程，安全執行
+    # translated
     df = None
     try:
         df = run_fn(**kwargs)
     except Exception as e:
         import traceback
-        print("⚠️ 執行 capstone 主程式時發生錯誤：", e)
+        print("translated", e)
         traceback.print_exc()
 
-    # 若 df 不存在或不是 DataFrame，嘗試讀取輸出檔
+    # translated
     if df is None or not isinstance(df, pd.DataFrame):
         try:
             df = pd.read_csv("full_market_inputs_with_reason.csv")
-            print("✅ 已從 full_market_inputs_with_reason.csv 讀回資料")
+            print("translated")
         except Exception as e:
-            print("❌ 無法取得 DataFrame，也無法讀取 CSV：", e)
-            # 回傳空表，避免整個 Streamlit 爆掉
+            print("translated", e)
+            # translated
             df = pd.DataFrame()
 
     return df
 
-# ---------------------- Settings 區塊 ----------------------
+# translated
 with st.expander("Settings", expanded=True):
     st.write("Please enter your Polygon API key (only stored in this session):")
     if "api_key" not in st.session_state or not st.session_state.api_key:
@@ -295,7 +282,7 @@ with st.expander("Settings", expanded=True):
     st.write("----")
     st.write("Data Source")
 
-    # ★ 僅保留兩種模式：Upload / Generate CSV
+    # translated
     source_mode = st.radio(
         "Choose data source",
         options=["Generate CSV", "Upload file"],
@@ -321,7 +308,7 @@ with st.expander("Settings", expanded=True):
                 st.download_button("Download generated.csv",data=csv_bytes,file_name="generated.csv",mime="text/csv")
         generated_df = st.session_state.get("generated_df", None)
 
-# ---------------------- 資料載入邏輯 ----------------------
+# translated
 if generated_df is not None:
     df = generated_df
 else:
@@ -346,8 +333,8 @@ st.dataframe(df.head(100), use_container_width=True)
 # -------------------------
 # Column Detection (Compact Style)
 # -------------------------
-div_gt_eps_col = _find_col_by_keywords(df, keywords=[("div","dividend","股利","配息"), (">","above","高於"), ("eps","earning","盈餘")]) \
-    or _find_col_by_keywords(df, keywords=[("dividend","股利","配息"), ("eps","earning","盈餘")])
+div_gt_eps_col = _find_col_by_keywords(df, keywords=[("div","dividend","translated","translated"), (">","above","translated"), ("eps","earning","translated")]) \
+    or _find_col_by_keywords(df, keywords=[("dividend","translated","translated"), ("eps","earning","translated")])
 
 mcap_col = _find_col_by_keywords(df, keywords=[("Market Cap Class","marketcap","class")])
 
@@ -359,16 +346,16 @@ equity_up_col = _find_col_by_keywords(df, keywords=[("annual_equity"), ("y1>y2")
 debt_down_col = _find_col_by_keywords(df, keywords=[("annual_debt"), ("y1<y2")])
 
 sector_col = _find_col_by_keywords(df, keywords=[("industry")])
-vol_col = _find_col_by_keywords(df, keywords=[("avgvolume", "交易量"), ("10d", "前一", "昨日")])
-status_col = _find_col_by_keywords(df, keywords=[("status", "評級", "等級", "建議")])
+vol_col = _find_col_by_keywords(df, keywords=[("avgvolume", "translated"), ("10d", "translated", "translated")])
+status_col = _find_col_by_keywords(df, keywords=[("status", "translated", "translated", "translated")])
 
-net_income_q_col = _find_col_by_keywords(df, keywords=[("net", "淨"), ("income", "利"), ("q", "季"), (">0", "正")])
-net_income_y1_col = _find_col_by_keywords(df, keywords=[("net", "淨"), ("income", "利"), ("y1", "年"), (">0", "正")])
+net_income_q_col = _find_col_by_keywords(df, keywords=[("net", "translated"), ("income", "translated"), ("q", "translated"), (">0", "translated")])
+net_income_y1_col = _find_col_by_keywords(df, keywords=[("net", "translated"), ("income", "translated"), ("y1", "translated"), (">0", "translated")])
 
-cross_col = _find_col_by_keywords(df, keywords=[("cross", "交叉"), ("golden", "death", "金叉", "死叉")])
-trend_col = _find_col_by_keywords(df, keywords=[("trend", "趨勢"), ("ema200")])
-macd_col = _find_col_by_keywords(df, keywords=[("macd"), ("cond", "條件", ">0", "<0")])
-price_ema_col = _find_col_by_keywords(df, keywords=[("price", "股價"), ("ema200"), (">", "<", "vs")])
+cross_col = _find_col_by_keywords(df, keywords=[("cross", "translated"), ("golden", "death", "translated", "translated")])
+trend_col = _find_col_by_keywords(df, keywords=[("trend", "translated"), ("ema200")])
+macd_col = _find_col_by_keywords(df, keywords=[("macd"), ("cond", "translated", ">0", "<0")])
+price_ema_col = _find_col_by_keywords(df, keywords=[("price", "translated"), ("ema200"), (">", "<", "vs")])
 
 # Fallback sensible defaults
 candidates = {
@@ -382,7 +369,7 @@ candidates = {
     "Price vs EMA200": price_ema_col,}
 
 with st.expander("Column Mapping (manually adjust if auto-detection is incorrect)", expanded=False):
-    # 建立一個選項名稱列表，以便於用索引分成兩組
+    # translated
     labels = list(candidates.keys())
     for i in range(0, len(labels), 2):
         label1 = labels[i]
@@ -393,7 +380,7 @@ with st.expander("Column Mapping (manually adjust if auto-detection is incorrect
                 f"{label1} Column",
                 options=["<Auto-detect>"] + list(df.columns),
                 index=(["<Auto-detect>"] + list(df.columns)).index(current1) if current1 in df.columns else 0,
-                key=f"col_map_{label1.replace(' ', '_').replace('?', '')}" # 確保 key 唯一
+                key=f"col_map_{label1.replace(' ', '_').replace('?', '')}" # translated
             )
         if i + 1 < len(labels):
             label2 = labels[i + 1]
@@ -403,7 +390,7 @@ with st.expander("Column Mapping (manually adjust if auto-detection is incorrect
                     f"{label2} Column",
                     options=["<Auto-detect>"] + list(df.columns),
                     index=(["<Auto-detect>"] + list(df.columns)).index(current2) if current2 in df.columns else 0,
-                    key=f"col_map_{label2.replace(' ', '_').replace('?', '')}" # 確保 key 唯一
+                    key=f"col_map_{label2.replace(' ', '_').replace('?', '')}" # translated
                 )
 
     # ----------------------------------------------------
@@ -438,7 +425,7 @@ with st.container(border=True):
         preset_clicked = st.button("⭐ Use Optimized Filter Set ⭐", type="secondary", key="load_preset_btn")
 
         
-    # ---- 如果上一輪按了「Load Preset」，在畫任何 widget 之前先套用預設 ----
+    # translated
     if st.session_state.get("apply_filter_preset", False):
         st.session_state["mcap_choice"]        = ["Large", "Mega"]
         st.session_state["status_choice"]      = ["BUY"]
@@ -457,7 +444,7 @@ with st.container(border=True):
         st.session_state["net_income_q_choice"]  = "True"
         st.session_state["net_income_y1_choice"] = "True"
 
-        # 用完旗標就關掉，避免每一輪都一直套用
+        # translated
         st.session_state["apply_filter_preset"] = False
         
 
@@ -489,10 +476,10 @@ with st.container(border=True):
     else:
         st.session_state["__selected_tickers__"] = []
 
-    # ---- 第一排：Sector / Market Cap / Status ----
+    # translated
     col1, col2, col3 = st.columns([1, 1, 1])
 
-    # Sector（多選）
+    # translated
     with col1:
         if 'sector_col' in locals() and sector_col and sector_col in df.columns:
             sector_options = sorted(
@@ -502,7 +489,7 @@ with st.container(border=True):
             sector_options = []
         sector_choice = st.multiselect( "Sector（Multiple Choice）", sector_options, default=[], key="sector_choice")
 
-    # Market Cap（多選）
+    # translated
     with col2:
         mcap_choice = st.multiselect("Market Cap（Multiple Choice）",["Mega", "Large", "Mid", "Small", "Micro","Nano"],
                                      default=[],key="mcap_choice")
@@ -512,17 +499,17 @@ with st.container(border=True):
         vol_col = _find_col_by_keywords(df, ["volume", ("prev day", "prev_day", "previous")])
         if vol_col:
             vol_series = pd.to_numeric(df[vol_col], errors="coerce")
-            # volume series 最小值
+            # translated
             _raw_min = np.nanmin(vol_series)
             if np.isnan(_raw_min):
                 vol_min_value = 0
             else:
                 vol_min_value = max(0, int(_raw_min))
 
-            # volume series 最大值
+            # translated
             _raw_max = np.nanmax(vol_series)
             if np.isnan(_raw_max):
-                vol_max_value = 100000000000000   # 或者你想用 1、100、其他預設
+                vol_max_value = 100000000000000   # translated
             else:
                 vol_max_value = int(_raw_max)
 
@@ -533,7 +520,7 @@ with st.container(border=True):
             st.caption("Volume column not found.")
             volume_min = None
 
-    # ---- 第二排：年度與季度比較 ----
+    # translated
     col4, col5, col6, col7 = st.columns([1, 1, 1, 1])
     with col4:
         eq_choice = st.selectbox("Annual Equity Up?", ["All", "Yes", "No"],key="eq_choice")
@@ -557,7 +544,7 @@ with st.container(border=True):
 
     
     col33,col12= st.columns([1,1])
-    # Status（多選：BUY/SELL/HOLD）
+    # translated
     with col33:
         if "Status" in df.columns:
             status_candidates = (
@@ -595,7 +582,7 @@ with st.container(border=True):
     with btn22:
         st.button("Clear All Filters", type="secondary", key="clear_all_filters_btn",on_click=clear_all_filters_callback)
 
-    # 如果按下「Load My Preset」，設定旗標並重新執行
+    # translated
     if preset_clicked:
         st.session_state["apply_filter_preset"] = True
         st.rerun()
@@ -606,7 +593,7 @@ with st.container(border=True):
 fdf = df.copy()
 
 if apply_clicked:
-    # 股票代號過濾（如有選擇）
+    # translated
     _sel = st.session_state.get("__selected_tickers__", [])
     if _sel:
         _ticker_col = _find_col(fdf, ["ticker", "symbol", "symbols"])
@@ -619,7 +606,7 @@ if apply_clicked:
         want = (eq_choice == "Yes")
         fdf = fdf[eq_series == want]
     elif eq_choice != "All" and (('equity_up_col' not in locals()) or (equity_up_col not in fdf.columns)):
-        st.warning("找不到『Equity Up?』欄，無法套用此條件。")
+        st.warning("translated")
 
     # Annual Debt Down?
     if 'debt_down_col' in locals() and debt_down_col and debt_down_col in fdf.columns and debt_choice != "All":
@@ -627,7 +614,7 @@ if apply_clicked:
         want = (debt_choice == "Yes")
         fdf = fdf[debt_series == want]
     elif debt_choice != "All" and (('debt_down_col' not in locals()) or (debt_down_col not in fdf.columns)):
-        st.warning("找不到『Debt Down?』欄，無法套用此條件。")
+        st.warning("translated")
 
     # Q vs Y1 Equity Up?
     if 'qv_eq_col' in locals() and qv_eq_col and qv_eq_col in fdf.columns and qv_eq_choice != "All":
@@ -635,7 +622,7 @@ if apply_clicked:
         want = (qv_eq_choice == "Yes")
         fdf = fdf[qv_eq_series == want]
     elif qv_eq_choice != "All" and (('qv_eq_col' not in locals()) or (qv_eq_col not in fdf.columns)):
-        st.warning("找不到『Q vs Y1 Equity Up?』欄，無法套用此條件。")
+        st.warning("translated")
 
     # Q vs Y1 Debt Down?
     if 'qv_db_col' in locals() and qv_db_col and qv_db_col in fdf.columns and qv_db_choice != "All":
@@ -643,16 +630,16 @@ if apply_clicked:
         want = (qv_db_choice == "Yes")
         fdf = fdf[qv_db_series == want]
     elif qv_db_choice != "All" and (('qv_db_col' not in locals()) or (qv_db_col not in fdf.columns)):
-        st.warning("找不到『Q vs Y1 Debt Down?』欄，無法套用此條件。")
+        st.warning("translated")
 
-    # Sector 過濾
+    # translated
     if sector_choice:
         if 'sector_col' in locals() and sector_col and sector_col in fdf.columns:
             fdf = fdf[fdf[sector_col].astype(str).isin(sector_choice)]
         else:
-            st.warning("找不到 Sector 欄，無法套用此條件。")
+            st.warning("translated")
 
-    # Market Cap（多選）——只支援文字分類篩選
+    # translated
     if mcap_choice:
         use_class_col = "Market Cap Class" if "Market Cap Class" in fdf.columns else None
         if 'mcap_col' in locals() and mcap_col and mcap_col in fdf.columns:
@@ -664,15 +651,15 @@ if apply_clicked:
             selected = [s.lower() for s in mcap_choice]
             fdf = fdf[mc_series.isin(selected)]
         else:
-            st.warning("找不到包含 Market Cap 分類文字（Mega/Large/Mid/Small/Micro）的欄位，無法套用市值條件。")
+            st.warning("translated")
 
-    # Status（多選）
+    # translated
     if status_choice:
         if "Status" in fdf.columns:
             target = [s.upper() for s in status_choice]
             fdf = fdf[fdf["Status"].astype(str).str.strip().str.upper().isin(target)]
         else:
-            st.warning("找不到 Status 欄，無法套用此條件。")
+            st.warning("translated")
    
     # MACD combined filter (MACD_BelowZero / MACD_AboveZero)
     if macd_choice != "All":
@@ -709,13 +696,13 @@ if apply_clicked:
 
 
 
-    # Cross 過濾（GoldenCross / DeathCross 或 goldencross / deathcross）
+    # translated
     if cross_choice != "All":
         gc_col = _find_col(fdf, ["GoldenCross", "goldencross"])
         dc_col = _find_col(fdf, ["DeathCross", "deathcross"])
 
         if not (gc_col or dc_col):
-            st.warning("找不到 GoldenCross / DeathCross 欄，無法套用 Cross 條件。")
+            st.warning("translated")
         else:
             gc = coerce_bool(fdf[gc_col]) if gc_col else pd.Series(pd.NA, index=fdf.index, dtype="boolean")
             dc = coerce_bool(fdf[dc_col]) if dc_col else pd.Series(pd.NA, index=fdf.index, dtype="boolean")
@@ -727,15 +714,15 @@ if apply_clicked:
             elif cross_choice == "None":
                 fdf = fdf[~gc.fillna(False) & ~dc.fillna(False)]
 
-    # Trend_EMA200 過濾
+    # translated
     if trend_choice != "All":
         trend_col = _find_col(fdf, ["Trend_EMA200"])
         if trend_col:
             fdf = fdf[fdf[trend_col].astype(str).str.strip().str.upper() == trend_choice]
         else:
-            st.warning("找不到 trend_EMA200 欄，無法套用此條件。")
+            st.warning("translated")
             
-    # AvgVolume_10D 過濾
+    # translated
     if volume_min is not None and volume_min > 0:
         vol_col = _find_col_by_keywords(
             fdf,
@@ -745,12 +732,12 @@ if apply_clicked:
             vol_series = pd.to_numeric(fdf[vol_col], errors="coerce")
             fdf = fdf[vol_series >= volume_min]
         else:
-            st.warning("找不到 AvgVolume_10D 欄，無法套用此條件。")
+            st.warning("translated")
 
 
-    #  Net income_Q > 0? 過濾 
+    # translated
     if 'net_income_q_choice' in locals() and net_income_q_choice != "All":
-        # 例如欄位名稱可能是 "net_income_Q" 或 "Net income_Q"
+        # translated
         net_q_col = _find_col_by_keywords(
             fdf,
             ["net", "income", ("lastQ", "lastq")]
@@ -763,31 +750,31 @@ if apply_clicked:
             elif net_income_q_choice == "<= 0":
                 fdf = fdf[s <= 0]
         else:
-            st.warning("找不到 Net income_Q 欄，無法套用此條件。")
+            st.warning("translated")
 
-    # Net income last year > 0? 過濾（欄位：net_income_lastyear>0?）
+    # translated
     if 'net_income_lastyear_choice' in locals() and net_income_lastyear_choice is True:
-        # 尋找欄位名稱可能的變化
+        # translated
         net_last_col = _find_col_by_keywords(
             fdf,
             ["net", "income", ("lastyear", "last_year", "last year"), ">0"]
         )
         if net_last_col:
-            # 用於代表 checkbox 勾選，例如 True / 1 / "Y"
+            # translated
             s = fdf[net_last_col].astype(str).str.lower().isin(["1", "true", "yes", "y"])
             fdf = fdf[s]
         else:
-            st.warning("找不到 net_income_lastyear>0? 欄，無法套用此條件。")
+            st.warning("translated")
 
     st.session_state["last_filtered_df"] = fdf.copy()
 else:
-    # 這一輪沒有按 Apply Filter，就沿用上一次的篩選結果（如果有）
+    # translated
     if "last_filtered_df" in st.session_state:
         fdf = st.session_state["last_filtered_df"].copy()
 
     
 
-# ---------------- 建立 cross 顯示欄位（僅一版） ----------------
+# translated
 gc_col = _find_col(fdf, ["GoldenCross", "goldencross"])
 dc_col = _find_col(fdf, ["DeathCross", "deathcross"])
 
@@ -838,7 +825,7 @@ st.download_button(
 )
 
 # -------------------------
-# 將結果表中的股票代號同步到 session_state，供後續模組（MACD 等）使用
+# translated
 # -------------------------
 def _detect_ticker_col(df):
     for c in df.columns:
@@ -854,7 +841,7 @@ if _t_f := _ticker_col:
     if selected_from_result:
         st.session_state["selected_tickers"] = selected_from_result
         st.session_state["__selected_tickers__"] = selected_from_result
-        st.caption(f"已同步 {len(selected_from_result)} 檔股票到後續分析模組（含 MACD）。")
+        st.caption(f"translated")
 
 
 # =========================================
@@ -897,8 +884,8 @@ def _max_close_between(px_df: pd.DataFrame, start_dt: pd.Timestamp, end_dt: pd.T
 
 # =========================================
 # Interactive MACD chart (dynamic loader for interactivemacd_stock_chart.py)
-# - 放在本檔最後面
-# - 需求：st.session_state["ticker_multi_input"]、st.session_state["api_key"] 或 POLYGON_API_KEY
+# translated
+# translated
 # =========================================
 import os, types, inspect, importlib.util, traceback
 from datetime import datetime
@@ -911,12 +898,11 @@ def _set_env_api_key_from_ui(api_key: str | None):
         os.environ["POLYGON_API_KEY"] = api_key
 
 def _read_py_without_runner(py_path: str) -> str:
-    """讀取 .py 並嘗試移除底部自動執行區塊（例如 if __name__ == '__main__': 或 # 執行）。"""
     with open(py_path, "r", encoding="utf-8", errors="replace") as f:
         src = f.read()
 
-    # 先嘗試砍掉 # 執行 / # Execute 等註記之後的內容
-    cut_markers = ["\n# 執行", "\n#\u57F7\u884C", "\n# Execute", "\n# RUN", "\n# run"]
+    # translated
+    cut_markers = ["\n# translated
     cut_pos = -1
     for mk in cut_markers:
         pos = src.find(mk)
@@ -924,7 +910,7 @@ def _read_py_without_runner(py_path: str) -> str:
             cut_pos = pos
             break
 
-    # 移除常見 main runner
+    # translated
     if cut_pos == -1:
         import re
         m = re.search(r"if\s+__name__\s*==\s*['\"]__main__['\"]\s*:\s*", src)
@@ -934,12 +920,12 @@ def _read_py_without_runner(py_path: str) -> str:
     return src if cut_pos == -1 else src[:cut_pos]
 
 def _load_chart_module(chart_path: str):
-    """將檔案載入到一個臨時模組命名空間，回傳模組對象（不執行底部 runner）。"""
+    """translated"""
     safe_src = _read_py_without_runner(chart_path)
     mod = types.ModuleType("interactive_macd_mod")
     mod.__file__ = chart_path
 
-    # 可選：注入常見名稱（若外部檔直接使用這些已存在物件）
+    # translated
     import math, time, json, datetime, requests, plotly, plotly.graph_objs as go
     mod.__dict__.update({
         "__name__": "interactive_macd_mod",
@@ -961,13 +947,6 @@ def _load_chart_module(chart_path: str):
     return mod
 
 def _call_render_flex(mod, tickers: list[str], api_key: str | None):
-    """
-    盡量相容未知的入口名稱與參數。
-    嘗試下列函式名，依序測試不同簽名：
-      render_interactive_macd, render_macd, render, app, main, run, plot_macd, plot
-    參數嘗試順序（逐一 try）：
-      (tickers, api_key), (tickers,), (st, tickers, api_key), (api_key,), (), (st,)
-    """
     candidates = [
         "render_interactive_macd", "render_macd", "render",
         "app", "main", "run", "plot_macd", "plot"
@@ -981,7 +960,7 @@ def _call_render_flex(mod, tickers: list[str], api_key: str | None):
                 (tickers,),
                 (st, tickers, api_key),
                 (api_key,),
-                tuple(),         # 無參數
+                tuple(),         # translated
                 (st,),
             ]:
                 try:
@@ -990,18 +969,18 @@ def _call_render_flex(mod, tickers: list[str], api_key: str | None):
                     tried.append(f"{name}{inspect.signature(fn)} with args={tuple(type(a).__name__ for a in args)} -> {te}")
                     continue
                 except Exception as e:
-                    # 真正執行內部失敗，直接丟出詳細錯誤
+                    # translated
                     raise
-    # 若沒有任何候選可執行，回傳詳細嘗試紀錄
-    raise RuntimeError("找不到可用的渲染入口點。嘗試紀錄：\n" + "\n".join(tried))
+    # translated
+    raise RuntimeError("translated" + "\n".join(tried))
 
 with st.expander("Interactive MACD Chart", expanded=False):
     st.write("Load and render the interactive MACD chart using current selected tickers.")
 
-    # 取得 API Key 與已選股票
+    # translated
     api_key = (st.session_state.get("api_key") or os.getenv("POLYGON_API_KEY", "")).strip()
 
-    # 優先用「篩選結果同步過來」的 tickers，沒有才用手動輸入框
+    # translated
     selected = (
         st.session_state.get("selected_tickers")
         or st.session_state.get("__selected_tickers__")
@@ -1029,11 +1008,11 @@ with st.expander("Interactive MACD Chart", expanded=False):
 
         _set_env_api_key_from_ui(api_key)
 
-        # 讀取檔案
+        # translated
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))
         except NameError:
-            # 某些環境可能沒有 __file__
+            # translated
             current_dir = os.getcwd()
         chart_path = os.path.join(current_dir, "chart.py")
         if not os.path.exists(chart_path):
@@ -1042,7 +1021,7 @@ with st.expander("Interactive MACD Chart", expanded=False):
 
         try:
             mod = _load_chart_module(chart_path)
-            # 嘗試呼叫渲染入口
+            # translated
             _call_render_flex(mod, [str(t).upper().strip() for t in selected], api_key)
             st.session_state["interactive_macd_ts"] = datetime.utcnow().isoformat()
             nfo.info("Interactive MACD chart rendered.")
