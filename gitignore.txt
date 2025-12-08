@@ -1,0 +1,8 @@
+# 忽略 Python 虛擬環境
+.venv
+venv
+__pycache__
+*.pyc
+
+# 忽略 macOS 特定的檔案
+.DS_Store
