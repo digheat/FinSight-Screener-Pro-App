@@ -1032,7 +1032,7 @@ with st.expander("Interactive MACD Chart", expanded=False):
         except NameError:
             # __file__ might not exist in some environments
             current_dir = os.getcwd()
-        chart_path = os.path.join(current_dir, "chart.py")
+        chart_path = os.path.join(current_dir, "macdchart.py")
         if not os.path.exists(chart_path):
             st.error(f"File not found: {chart_path}")
             st.stop()
