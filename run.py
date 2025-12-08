@@ -1,4 +1,3 @@
-
 import os
 import io
 import pandas as pd
@@ -56,38 +55,41 @@ def load_dataframe(file_path: str | None, uploaded_file) -> pd.DataFrame | None:
             elif name.endswith((".xlsx", ".xls")):
                 return pd.read_excel(uploaded_file)
             else:
-                st.warning("translated")
+                st.warning("Only .csv/.xlsx/.xls are supported.")
                 return None
         if file_path:
             lp = file_path.strip()
             if not os.path.exists(lp):
-                st.warning(f"translated")
+                st.warning(f"File not found: {lp}")
                 return None
             if lp.lower().endswith(".csv"):
                 return pd.read_csv(lp)
             elif lp.lower().endswith((".xlsx", ".xls")):
                 return pd.read_excel(lp)
             else:
-                st.warning("translated")
+                st.warning("Only .csv/.xlsx/.xls are supported.")
                 return None
     except Exception as e:
-        st.error(f"reading error：{e}")
+        st.error(f"Reading error: {e}")
         return None
     return None
 
 
 def coerce_bool(series: pd.Series) -> pd.Series:
-    # translated
+    """
+    Coerce bool / integers / 'true'/'false'/'yes'/'no' etc. to pandas BooleanDtype.
+    """
+    # Already bool
     if pd.api.types.is_bool_dtype(series):
         return series.astype("boolean")
 
-    # translated
+    # Numeric: 0 -> False, others non-NA -> True
     if pd.api.types.is_numeric_dtype(series):
         return series.map(
             lambda x: (pd.notna(x) and float(x) != 0) if pd.notna(x) else pd.NA
         ).astype("boolean")
 
-    # translated
+    # String: common true/false strings
     s = series.astype(str).str.strip().str.lower()
     true_set = {"true", "1", "yes", "y", "t"}
     false_set = {"false", "0", "no", "n", "f", ""}
@@ -96,6 +98,10 @@ def coerce_bool(series: pd.Series) -> pd.Series:
 
 
 def _find_col(df: pd.DataFrame, candidates) -> str | None:
+    """
+    Find column name in df ignoring case, return actual column name or None.
+    candidates can be a single string or a list of strings.
+    """
     if isinstance(candidates, str):
         candidates = [candidates]
     lower_map = {c.lower(): c for c in df.columns}
@@ -167,31 +173,37 @@ if not st.session_state.started:
             st.session_state.started = True
     st.stop()
 
-# translated
+# ---- Optional: Cached data generation ----
 def generate_csv_in_app(api_key: str | None = None,
                         limit_stocks: int | None = None) -> pd.DataFrame:
+    """
+    Method 1 (Dynamic loading of capstone script):
+    - Do not modify the original capstone file; only dynamically load its function definitions here, and call run_full_market_inputs_with_reason(...)
+    - Automatically skip the "Execution" demonstration block at the bottom of capstone (to prevent it from running upon import)
+    - Maintain the original UI flow and download logic: return DataFrame, and simultaneously write out full_market_inputs_with_reason.csv
+    """
     import os, types, inspect, pandas as pd
 
-    # translated
+    # 1) Pass the API Key from UI input to the capstone program
     if api_key:
         os.environ["POLYGON_API_KEY"] = api_key
 
-    # translated
+    # 2) Capstone file path (keep it in the same folder as the current file)
     current_dir = os.path.dirname(os.path.abspath(__file__))
     CAP_PATH = os.path.join(current_dir, "generatecsv.py")
 
 
-    # translated
-    # translated
-    # translated
+    # 3) Read the capstone source code and remove the auto-execution block at the bottom before execution
+    #    The bottom of the original file usually has:
+    #      # Execution
     #      df_all = run_full_market_inputs_with_reason(...)
     #      display(df_all.head(30))
-    # translated
+    #      print("Total rows:", len(df_all))
     with open(CAP_PATH, "r", encoding="utf-8", errors="replace") as f:
         src = f.read()
 
-    # translated
-    cut_markers = ["\n# translated
+    # Priority: use the marker "# Execution" to truncate
+    cut_markers = ["\n# Execute", "\n# Execution", "\n# RUN", "\n# run"] # Using only English markers now
     cut_pos = -1
     for mk in cut_markers:
         pos = src.find(mk)
@@ -199,20 +211,20 @@ def generate_csv_in_app(api_key: str | None = None,
             cut_pos = pos
             break
 
-    # translated
+    # If the marker is not found, try to detect common function call lines
     if cut_pos == -1:
         import re
         m = re.search(r'^\s*df_all\s*=\s*run_full_market_inputs_with_reason\s*\(', src, re.M)
         if m:
             cut_pos = m.start()
 
-    # translated
+    # If nothing is found, execute the whole file (but usually it's found; if the whole file is executed, capstone will run directly, which might take longer)
     safe_src = src if cut_pos == -1 else src[:cut_pos]
 
-    # translated
+    # 4) Create a temporary module, injecting only "function and constant definitions"
     cap_mod = types.ModuleType("cap_mod_sandbox")
     cap_mod.__file__ = CAP_PATH
-    # translated
+    # Provide common basic imports to avoid original file dependencies on these names without explicit import
     import math, time, json, datetime
     import builtins
     cap_mod.__dict__.update({
@@ -224,56 +236,56 @@ def generate_csv_in_app(api_key: str | None = None,
     })
 
     code = compile(safe_src, CAP_PATH, "exec")
-    exec(code, cap_mod.__dict__)  # translated
+    exec(code, cap_mod.__dict__)  # This will not run the bottom demonstration block
 
-    # translated
+    # 5) Get run_full_market_inputs_with_reason(...) and pass arguments compatibly
     if not hasattr(cap_mod, "run_full_market_inputs_with_reason"):
-        raise RuntimeError("translated")
+        raise RuntimeError("run_full_market_inputs_with_reason(...) not found in capstone file")
 
     run_fn = cap_mod.run_full_market_inputs_with_reason
     sig = inspect.signature(run_fn)
 
-    # translated
+    # Basic parameters: output filename and share classes filter
     kwargs = {}
     if "outfile" in sig.parameters:
         kwargs["outfile"] = "full_market_inputs_with_reason.csv"
     if "skip_share_classes" in sig.parameters:
         kwargs["skip_share_classes"] = True
 
-    # translated
+    # Speed and partitioning settings (only pass if capstone defines the parameter)
     if "max_workers" in sig.parameters:
-        # translated
+        # Use MAX_WORKERS constant from capstone if available, otherwise use a reasonable default
         max_workers = getattr(cap_mod, "MAX_WORKERS", 32)
         kwargs["max_workers"] = max_workers
     if "part_every" in sig.parameters:
         kwargs["part_every"] = 1500
 
-    # translated
+    # Limit the number of stocks to scan (only pass if capstone supports the limit parameter)
     if "limit" in sig.parameters and limit_stocks:
         kwargs["limit"] = int(limit_stocks)
 
-    # translated
+    # 6) Execute capstone's main process, safe execution
     df = None
     try:
         df = run_fn(**kwargs)
     except Exception as e:
         import traceback
-        print("translated", e)
+        print("⚠️ Error executing capstone main program:", e)
         traceback.print_exc()
 
-    # translated
+    # If df is None or not a DataFrame, try to read the output file
     if df is None or not isinstance(df, pd.DataFrame):
         try:
             df = pd.read_csv("full_market_inputs_with_reason.csv")
-            print("translated")
+            print("✅ Data successfully read back from full_market_inputs_with_reason.csv")
         except Exception as e:
-            print("translated", e)
-            # translated
+            print("❌ Cannot get DataFrame, and cannot read CSV:", e)
+            # Return an empty table to prevent the whole Streamlit app from crashing
             df = pd.DataFrame()
 
     return df
 
-# translated
+# ---------------------- Settings Block ----------------------
 with st.expander("Settings", expanded=True):
     st.write("Please enter your Polygon API key (only stored in this session):")
     if "api_key" not in st.session_state or not st.session_state.api_key:
@@ -282,7 +294,7 @@ with st.expander("Settings", expanded=True):
     st.write("----")
     st.write("Data Source")
 
-    # translated
+    # ★ Only keep two modes: Upload / Generate CSV
     source_mode = st.radio(
         "Choose data source",
         options=["Generate CSV", "Upload file"],
@@ -308,7 +320,7 @@ with st.expander("Settings", expanded=True):
                 st.download_button("Download generated.csv",data=csv_bytes,file_name="generated.csv",mime="text/csv")
         generated_df = st.session_state.get("generated_df", None)
 
-# translated
+# ---------------------- Data Loading Logic ----------------------
 if generated_df is not None:
     df = generated_df
 else:
@@ -322,7 +334,7 @@ if df is None:
 
 # preview
 st.write("### Raw Data Preview")
-st.write(f"total {len(df)}")
+st.write(f"Total {len(df)}")
 st.dataframe(df.head(100), use_container_width=True)
 
 
@@ -333,8 +345,8 @@ st.dataframe(df.head(100), use_container_width=True)
 # -------------------------
 # Column Detection (Compact Style)
 # -------------------------
-div_gt_eps_col = _find_col_by_keywords(df, keywords=[("div","dividend","translated","translated"), (">","above","translated"), ("eps","earning","translated")]) \
-    or _find_col_by_keywords(df, keywords=[("dividend","translated","translated"), ("eps","earning","translated")])
+div_gt_eps_col = _find_col_by_keywords(df, keywords=[("div","dividend","股利","配息"), (">","above","高於"), ("eps","earning","盈餘")]) \
+    or _find_col_by_keywords(df, keywords=[("dividend","股利","配息"), ("eps","earning","盈餘")])
 
 mcap_col = _find_col_by_keywords(df, keywords=[("Market Cap Class","marketcap","class")])
 
@@ -345,17 +357,17 @@ qv_db_col = _find_col_by_keywords(df, keywords=[("q_vs_y1_debt_down","q vs y1 de
 equity_up_col = _find_col_by_keywords(df, keywords=[("annual_equity"), ("y1>y2")])
 debt_down_col = _find_col_by_keywords(df, keywords=[("annual_debt"), ("y1<y2")])
 
-sector_col = _find_col_by_keywords(df, keywords=[("industry")])
-vol_col = _find_col_by_keywords(df, keywords=[("avgvolume", "translated"), ("10d", "translated", "translated")])
-status_col = _find_col_by_keywords(df, keywords=[("status", "translated", "translated", "translated")])
+sector_col = _find_col_by_keywords(df, keywords=[("industry", "sector")])
+vol_col = _find_col_by_keywords(df, keywords=[("avgvolume", "volume"), ("10d", "previous day")])
+status_col = _find_col_by_keywords(df, keywords=[("status", "rating", "recommendation")])
 
-net_income_q_col = _find_col_by_keywords(df, keywords=[("net", "translated"), ("income", "translated"), ("q", "translated"), (">0", "translated")])
-net_income_y1_col = _find_col_by_keywords(df, keywords=[("net", "translated"), ("income", "translated"), ("y1", "translated"), (">0", "translated")])
+net_income_q_col = _find_col_by_keywords(df, keywords=[("net", "income"), ("q", "quarterly"), (">0", "positive")])
+net_income_y1_col = _find_col_by_keywords(df, keywords=[("net", "income"), ("y1", "annual"), (">0", "positive")])
 
-cross_col = _find_col_by_keywords(df, keywords=[("cross", "translated"), ("golden", "death", "translated", "translated")])
-trend_col = _find_col_by_keywords(df, keywords=[("trend", "translated"), ("ema200")])
-macd_col = _find_col_by_keywords(df, keywords=[("macd"), ("cond", "translated", ">0", "<0")])
-price_ema_col = _find_col_by_keywords(df, keywords=[("price", "translated"), ("ema200"), (">", "<", "vs")])
+cross_col = _find_col_by_keywords(df, keywords=[("cross"), ("golden", "death")])
+trend_col = _find_col_by_keywords(df, keywords=[("trend"), ("ema200")])
+macd_col = _find_col_by_keywords(df, keywords=[("macd"), ("cond", ">0", "<0")])
+price_ema_col = _find_col_by_keywords(df, keywords=[("price"), ("ema200"), (">", "<", "vs")])
 
 # Fallback sensible defaults
 candidates = {
@@ -369,7 +381,7 @@ candidates = {
     "Price vs EMA200": price_ema_col,}
 
 with st.expander("Column Mapping (manually adjust if auto-detection is incorrect)", expanded=False):
-    # translated
+    # Create a list of option names, so they can be divided into two groups by index
     labels = list(candidates.keys())
     for i in range(0, len(labels), 2):
         label1 = labels[i]
@@ -380,7 +392,7 @@ with st.expander("Column Mapping (manually adjust if auto-detection is incorrect
                 f"{label1} Column",
                 options=["<Auto-detect>"] + list(df.columns),
                 index=(["<Auto-detect>"] + list(df.columns)).index(current1) if current1 in df.columns else 0,
-                key=f"col_map_{label1.replace(' ', '_').replace('?', '')}" # translated
+                key=f"col_map_{label1.replace(' ', '_').replace('?', '')}" # Ensure key is unique
             )
         if i + 1 < len(labels):
             label2 = labels[i + 1]
@@ -390,7 +402,7 @@ with st.expander("Column Mapping (manually adjust if auto-detection is incorrect
                     f"{label2} Column",
                     options=["<Auto-detect>"] + list(df.columns),
                     index=(["<Auto-detect>"] + list(df.columns)).index(current2) if current2 in df.columns else 0,
-                    key=f"col_map_{label2.replace(' ', '_').replace('?', '')}" # translated
+                    key=f"col_map_{label2.replace(' ', '_').replace('?', '')}" # Ensure key is unique
                 )
 
     # ----------------------------------------------------
@@ -425,7 +437,7 @@ with st.container(border=True):
         preset_clicked = st.button("⭐ Use Optimized Filter Set ⭐", type="secondary", key="load_preset_btn")
 
         
-    # translated
+    # ---- If "Load Preset" was clicked in the previous run, apply defaults before drawing any widget ----
     if st.session_state.get("apply_filter_preset", False):
         st.session_state["mcap_choice"]        = ["Large", "Mega"]
         st.session_state["status_choice"]      = ["BUY"]
@@ -444,10 +456,9 @@ with st.container(border=True):
         st.session_state["net_income_q_choice"]  = "True"
         st.session_state["net_income_y1_choice"] = "True"
 
-        # translated
+        # Turn off the flag after use to prevent applying it every run
         st.session_state["apply_filter_preset"] = False
         
-
 
     # 0) Stock symbol filter (multi-select, case-insensitive)
     ticker_col = None
@@ -460,7 +471,7 @@ with st.container(border=True):
                 df[ticker_col].astype(str).str.strip().str.upper().unique()).dropna())
 
         _sel = st.multiselect(
-            "Type or select stock symbols（Multiple Choice）",
+            "Type or select stock symbols (Multiple Choice)",
             options=all_tickers,
             default=[],
             key="ticker_multi_input",
@@ -476,10 +487,10 @@ with st.container(border=True):
     else:
         st.session_state["__selected_tickers__"] = []
 
-    # translated
+    # ---- Row 1: Sector / Market Cap / Volume ----
     col1, col2, col3 = st.columns([1, 1, 1])
 
-    # translated
+    # Sector (Multi-select)
     with col1:
         if 'sector_col' in locals() and sector_col and sector_col in df.columns:
             sector_options = sorted(
@@ -487,11 +498,11 @@ with st.container(border=True):
             )
         else:
             sector_options = []
-        sector_choice = st.multiselect( "Sector（Multiple Choice）", sector_options, default=[], key="sector_choice")
+        sector_choice = st.multiselect( "Sector (Multiple Choice)", sector_options, default=[], key="sector_choice")
 
-    # translated
+    # Market Cap (Multi-select)
     with col2:
-        mcap_choice = st.multiselect("Market Cap（Multiple Choice）",["Mega", "Large", "Mid", "Small", "Micro","Nano"],
+        mcap_choice = st.multiselect("Market Cap (Multiple Choice)",["Mega", "Large", "Mid", "Small", "Micro","Nano"],
                                      default=[],key="mcap_choice")
 
      # Volume (prev day)
@@ -499,17 +510,17 @@ with st.container(border=True):
         vol_col = _find_col_by_keywords(df, ["volume", ("prev day", "prev_day", "previous")])
         if vol_col:
             vol_series = pd.to_numeric(df[vol_col], errors="coerce")
-            # translated
+            # volume series min value
             _raw_min = np.nanmin(vol_series)
             if np.isnan(_raw_min):
                 vol_min_value = 0
             else:
                 vol_min_value = max(0, int(_raw_min))
 
-            # translated
+            # volume series max value
             _raw_max = np.nanmax(vol_series)
             if np.isnan(_raw_max):
-                vol_max_value = 100000000000000   # translated
+                vol_max_value = 100000000000000   # Or your preferred default
             else:
                 vol_max_value = int(_raw_max)
 
@@ -520,7 +531,7 @@ with st.container(border=True):
             st.caption("Volume column not found.")
             volume_min = None
 
-    # translated
+    # ---- Row 2: Annual and Quarterly Comparison ----
     col4, col5, col6, col7 = st.columns([1, 1, 1, 1])
     with col4:
         eq_choice = st.selectbox("Annual Equity Up?", ["All", "Yes", "No"],key="eq_choice")
@@ -531,7 +542,7 @@ with st.container(border=True):
     with col7:
         qv_db_choice = st.selectbox("Q vs Y1 Debt Down?", ["All", "Yes", "No"],key="qv_db_choice")
 
-    # ---- Row 5: Volume / Net Income ----
+    # ---- Row 5: Net Income ----
     col15, col16, col23, col24 = st.columns([1,1,1,1])
     with col15:
         net_income_q_choice = st.selectbox( "Net income_Q > 0?", ["All", "True", "False or 0"],key="net_income_q_choice",
@@ -544,7 +555,7 @@ with st.container(border=True):
 
     
     col33,col12= st.columns([1,1])
-    # translated
+    # Status (Multi-select: BUY/SELL/HOLD)
     with col33:
         if "Status" in df.columns:
             status_candidates = (
@@ -555,12 +566,12 @@ with st.container(border=True):
         else:
             status_options = ["BUY", "SELL", "HOLD"]
 
-        status_choice = st.multiselect( "Status（Multiple Choice）", status_options, default=[], key="status_choice")
+        status_choice = st.multiselect( "Status (Multiple Choice)", status_options, default=[], key="status_choice")
 
     # ---- Row 3: Technical (Cross / Trend_EMA200/MACD / EMA200 boolean)----
     col8, col9, col10, col12  = st.columns([1, 1, 1, 1])
     with col8:
-        cross_choice = st.selectbox("Cross (goldencross / deathcross)", ["All", "Golden Cross", "Death Cross", "None"],key="cross_choice",
+        cross_choice = st.selectbox("Cross (Golden Cross / Death Cross)", ["All", "Golden Cross", "Death Cross", "None"],key="cross_choice",
             help="Filter by GoldenCross / DeathCross (True/False)")
     with col9: 
         trend_choice = st.selectbox("Trend_EMA200", ["All", "UP", "DOWN"],key="trend_choice",
@@ -582,7 +593,7 @@ with st.container(border=True):
     with btn22:
         st.button("Clear All Filters", type="secondary", key="clear_all_filters_btn",on_click=clear_all_filters_callback)
 
-    # translated
+    # If "Load My Preset" is clicked, set the flag and rerun
     if preset_clicked:
         st.session_state["apply_filter_preset"] = True
         st.rerun()
@@ -593,7 +604,7 @@ with st.container(border=True):
 fdf = df.copy()
 
 if apply_clicked:
-    # translated
+    # Ticker filter (if selected)
     _sel = st.session_state.get("__selected_tickers__", [])
     if _sel:
         _ticker_col = _find_col(fdf, ["ticker", "symbol", "symbols"])
@@ -606,7 +617,7 @@ if apply_clicked:
         want = (eq_choice == "Yes")
         fdf = fdf[eq_series == want]
     elif eq_choice != "All" and (('equity_up_col' not in locals()) or (equity_up_col not in fdf.columns)):
-        st.warning("translated")
+        st.warning("Cannot find the 'Annual Equity Up?' column, unable to apply this condition.")
 
     # Annual Debt Down?
     if 'debt_down_col' in locals() and debt_down_col and debt_down_col in fdf.columns and debt_choice != "All":
@@ -614,7 +625,7 @@ if apply_clicked:
         want = (debt_choice == "Yes")
         fdf = fdf[debt_series == want]
     elif debt_choice != "All" and (('debt_down_col' not in locals()) or (debt_down_col not in fdf.columns)):
-        st.warning("translated")
+        st.warning("Cannot find the 'Annual Debt Down?' column, unable to apply this condition.")
 
     # Q vs Y1 Equity Up?
     if 'qv_eq_col' in locals() and qv_eq_col and qv_eq_col in fdf.columns and qv_eq_choice != "All":
@@ -622,7 +633,7 @@ if apply_clicked:
         want = (qv_eq_choice == "Yes")
         fdf = fdf[qv_eq_series == want]
     elif qv_eq_choice != "All" and (('qv_eq_col' not in locals()) or (qv_eq_col not in fdf.columns)):
-        st.warning("translated")
+        st.warning("Cannot find the 'Q vs Y1 Equity Up?' column, unable to apply this condition.")
 
     # Q vs Y1 Debt Down?
     if 'qv_db_col' in locals() and qv_db_col and qv_db_col in fdf.columns and qv_db_choice != "All":
@@ -630,16 +641,16 @@ if apply_clicked:
         want = (qv_db_choice == "Yes")
         fdf = fdf[qv_db_series == want]
     elif qv_db_choice != "All" and (('qv_db_col' not in locals()) or (qv_db_col not in fdf.columns)):
-        st.warning("translated")
+        st.warning("Cannot find the 'Q vs Y1 Debt Down?' column, unable to apply this condition.")
 
-    # translated
+    # Sector Filter
     if sector_choice:
         if 'sector_col' in locals() and sector_col and sector_col in fdf.columns:
             fdf = fdf[fdf[sector_col].astype(str).isin(sector_choice)]
         else:
-            st.warning("translated")
+            st.warning("Cannot find the Sector column, unable to apply this condition.")
 
-    # translated
+    # Market Cap (Multi-select) - Only supports text classification filtering
     if mcap_choice:
         use_class_col = "Market Cap Class" if "Market Cap Class" in fdf.columns else None
         if 'mcap_col' in locals() and mcap_col and mcap_col in fdf.columns:
@@ -651,15 +662,15 @@ if apply_clicked:
             selected = [s.lower() for s in mcap_choice]
             fdf = fdf[mc_series.isin(selected)]
         else:
-            st.warning("translated")
+            st.warning("Cannot find a column containing Market Cap classification text (Mega/Large/Mid/Small/Micro), unable to apply market cap condition.")
 
-    # translated
+    # Status (Multi-select)
     if status_choice:
         if "Status" in fdf.columns:
             target = [s.upper() for s in status_choice]
             fdf = fdf[fdf["Status"].astype(str).str.strip().str.upper().isin(target)]
         else:
-            st.warning("translated")
+            st.warning("Cannot find the Status column, unable to apply this condition.")
    
     # MACD combined filter (MACD_BelowZero / MACD_AboveZero)
     if macd_choice != "All":
@@ -695,14 +706,13 @@ if apply_clicked:
                 fdf = fdf[price_lt.fillna(False)]
 
 
-
-    # translated
+    # Cross Filter (GoldenCross / DeathCross or goldencross / deathcross)
     if cross_choice != "All":
         gc_col = _find_col(fdf, ["GoldenCross", "goldencross"])
         dc_col = _find_col(fdf, ["DeathCross", "deathcross"])
 
         if not (gc_col or dc_col):
-            st.warning("translated")
+            st.warning("Cannot find GoldenCross / DeathCross columns, unable to apply Cross condition.")
         else:
             gc = coerce_bool(fdf[gc_col]) if gc_col else pd.Series(pd.NA, index=fdf.index, dtype="boolean")
             dc = coerce_bool(fdf[dc_col]) if dc_col else pd.Series(pd.NA, index=fdf.index, dtype="boolean")
@@ -714,15 +724,15 @@ if apply_clicked:
             elif cross_choice == "None":
                 fdf = fdf[~gc.fillna(False) & ~dc.fillna(False)]
 
-    # translated
+    # Trend_EMA200 Filter
     if trend_choice != "All":
         trend_col = _find_col(fdf, ["Trend_EMA200"])
         if trend_col:
             fdf = fdf[fdf[trend_col].astype(str).str.strip().str.upper() == trend_choice]
         else:
-            st.warning("translated")
+            st.warning("Cannot find the Trend_EMA200 column, unable to apply this condition.")
             
-    # translated
+    # AvgVolume_10D Filter
     if volume_min is not None and volume_min > 0:
         vol_col = _find_col_by_keywords(
             fdf,
@@ -732,12 +742,12 @@ if apply_clicked:
             vol_series = pd.to_numeric(fdf[vol_col], errors="coerce")
             fdf = fdf[vol_series >= volume_min]
         else:
-            st.warning("translated")
+            st.warning("Cannot find the AvgVolume_10D column, unable to apply this condition.")
 
 
-    # translated
+    #  Net income_Q > 0? Filter 
     if 'net_income_q_choice' in locals() and net_income_q_choice != "All":
-        # translated
+        # e.g., column name might be "net_income_Q" or "Net income_Q"
         net_q_col = _find_col_by_keywords(
             fdf,
             ["net", "income", ("lastQ", "lastq")]
@@ -750,31 +760,31 @@ if apply_clicked:
             elif net_income_q_choice == "<= 0":
                 fdf = fdf[s <= 0]
         else:
-            st.warning("translated")
+            st.warning("Cannot find the Net income_Q column, unable to apply this condition.")
 
-    # translated
+    # Net income last year > 0? Filter (Column: net_income_lastyear>0?)
     if 'net_income_lastyear_choice' in locals() and net_income_lastyear_choice is True:
-        # translated
+        # Find possible variations of the column name
         net_last_col = _find_col_by_keywords(
             fdf,
             ["net", "income", ("lastyear", "last_year", "last year"), ">0"]
         )
         if net_last_col:
-            # translated
+            # Used to represent checkbox checked, e.g., True / 1 / "Y"
             s = fdf[net_last_col].astype(str).str.lower().isin(["1", "true", "yes", "y"])
             fdf = fdf[s]
         else:
-            st.warning("translated")
+            st.warning("Cannot find the net_income_lastyear>0? column, unable to apply this condition.")
 
     st.session_state["last_filtered_df"] = fdf.copy()
 else:
-    # translated
+    # If "Apply Filter" was not clicked this run, use the previous filtered result (if available)
     if "last_filtered_df" in st.session_state:
         fdf = st.session_state["last_filtered_df"].copy()
 
     
 
-# translated
+# ---------------- Create cross display column (only one version) ----------------
 gc_col = _find_col(fdf, ["GoldenCross", "goldencross"])
 dc_col = _find_col(fdf, ["DeathCross", "deathcross"])
 
@@ -812,7 +822,7 @@ rename_map_output = {
 fdf_out = fdf_out.rename(columns=rename_map_output)
 
 st.write("### Result")
-st.caption(f"total {len(fdf_out)}")
+st.caption(f"Total {len(fdf_out)}")
 st.dataframe(fdf_out, use_container_width=True)
 
 csv_bytes = fdf_out.to_csv(index=False).encode("utf-8-sig")
@@ -825,7 +835,7 @@ st.download_button(
 )
 
 # -------------------------
-# translated
+# Sync stock tickers from the result table to session_state for subsequent modules (e.g., MACD)
 # -------------------------
 def _detect_ticker_col(df):
     for c in df.columns:
@@ -841,7 +851,7 @@ if _t_f := _ticker_col:
     if selected_from_result:
         st.session_state["selected_tickers"] = selected_from_result
         st.session_state["__selected_tickers__"] = selected_from_result
-        st.caption(f"translated")
+        st.caption(f"Synced {len(selected_from_result)} stocks to subsequent analysis modules (including MACD).")
 
 
 # =========================================
@@ -884,8 +894,8 @@ def _max_close_between(px_df: pd.DataFrame, start_dt: pd.Timestamp, end_dt: pd.T
 
 # =========================================
 # Interactive MACD chart (dynamic loader for interactivemacd_stock_chart.py)
-# translated
-# translated
+# - Placed at the end of this file
+# - Requirements: st.session_state["ticker_multi_input"], st.session_state["api_key"] or POLYGON_API_KEY
 # =========================================
 import os, types, inspect, importlib.util, traceback
 from datetime import datetime
@@ -898,11 +908,12 @@ def _set_env_api_key_from_ui(api_key: str | None):
         os.environ["POLYGON_API_KEY"] = api_key
 
 def _read_py_without_runner(py_path: str) -> str:
+    """Read .py and try to remove the auto-execution block at the bottom (e.g., if __name__ == '__main__': or # Execution)."""
     with open(py_path, "r", encoding="utf-8", errors="replace") as f:
         src = f.read()
 
-    # translated
-    cut_markers = ["\n# translated
+    # First attempt to remove content after markers like # Execution / # Execute
+    cut_markers = ["\n# Execute", "\n# Execution", "\n# RUN", "\n# run"] # Using only English markers now
     cut_pos = -1
     for mk in cut_markers:
         pos = src.find(mk)
@@ -910,7 +921,7 @@ def _read_py_without_runner(py_path: str) -> str:
             cut_pos = pos
             break
 
-    # translated
+    # Remove common main runner
     if cut_pos == -1:
         import re
         m = re.search(r"if\s+__name__\s*==\s*['\"]__main__['\"]\s*:\s*", src)
@@ -920,12 +931,12 @@ def _read_py_without_runner(py_path: str) -> str:
     return src if cut_pos == -1 else src[:cut_pos]
 
 def _load_chart_module(chart_path: str):
-    """translated"""
+    """Load the file into a temporary module namespace, return the module object (without executing the bottom runner)."""
     safe_src = _read_py_without_runner(chart_path)
     mod = types.ModuleType("interactive_macd_mod")
     mod.__file__ = chart_path
 
-    # translated
+    # Optional: Inject common names (if the external file directly uses these existing objects)
     import math, time, json, datetime, requests, plotly, plotly.graph_objs as go
     mod.__dict__.update({
         "__name__": "interactive_macd_mod",
@@ -947,6 +958,13 @@ def _load_chart_module(chart_path: str):
     return mod
 
 def _call_render_flex(mod, tickers: list[str], api_key: str | None):
+    """
+    Try to call a rendering function in a compatible way for unknown entry names and parameters.
+    Try the following function names, testing different signatures in order:
+      render_interactive_macd, render_macd, render, app, main, run, plot_macd, plot
+    Parameter testing order (try one by one):
+      (tickers, api_key), (tickers,), (st, tickers, api_key), (api_key,), (), (st,)
+    """
     candidates = [
         "render_interactive_macd", "render_macd", "render",
         "app", "main", "run", "plot_macd", "plot"
@@ -960,7 +978,7 @@ def _call_render_flex(mod, tickers: list[str], api_key: str | None):
                 (tickers,),
                 (st, tickers, api_key),
                 (api_key,),
-                tuple(),         # translated
+                tuple(),         # No parameters
                 (st,),
             ]:
                 try:
@@ -969,18 +987,18 @@ def _call_render_flex(mod, tickers: list[str], api_key: str | None):
                     tried.append(f"{name}{inspect.signature(fn)} with args={tuple(type(a).__name__ for a in args)} -> {te}")
                     continue
                 except Exception as e:
-                    # translated
+                    # Real internal execution failure, raise the detailed error directly
                     raise
-    # translated
-    raise RuntimeError("translated" + "\n".join(tried))
+    # If no candidate can be executed, return a detailed attempt log
+    raise RuntimeError("No available rendering entry point found. Attempt log:\n" + "\n".join(tried))
 
 with st.expander("Interactive MACD Chart", expanded=False):
     st.write("Load and render the interactive MACD chart using current selected tickers.")
 
-    # translated
+    # Get API Key and selected stocks
     api_key = (st.session_state.get("api_key") or os.getenv("POLYGON_API_KEY", "")).strip()
 
-    # translated
+    # Priority: use tickers "synced from filter result", otherwise use the manual input box
     selected = (
         st.session_state.get("selected_tickers")
         or st.session_state.get("__selected_tickers__")
@@ -1008,25 +1026,23 @@ with st.expander("Interactive MACD Chart", expanded=False):
 
         _set_env_api_key_from_ui(api_key)
 
-        # translated
+        # Read the file
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))
         except NameError:
-            # translated
+            # __file__ might not exist in some environments
             current_dir = os.getcwd()
-        chart_path = os.path.join(current_dir, "macdchart.py")
+        chart_path = os.path.join(current_dir, "chart.py")
         if not os.path.exists(chart_path):
             st.error(f"File not found: {chart_path}")
             st.stop()
 
         try:
             mod = _load_chart_module(chart_path)
-            # translated
+            # Try calling the rendering entry point
             _call_render_flex(mod, [str(t).upper().strip() for t in selected], api_key)
             st.session_state["interactive_macd_ts"] = datetime.utcnow().isoformat()
             nfo.info("Interactive MACD chart rendered.")
         except Exception as e:
             st.error("Failed to render interactive MACD chart. See details below.")
             st.exception(e)
-
-
