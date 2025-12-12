@@ -312,8 +312,8 @@ with st.expander("Settings", expanded=True):
             st.write("Generate a CSV in-app and load it directly.")
             gen_now = st.button("Generate CSV now", type="primary", use_container_width=False)
             if gen_now:
-                df_gen = generate_csv_in_app(st.session_state.api_key or None, limit_stocks=20)
-
+                df_gen = generate_csv_in_app(st.session_state.api_key or None)
+                #df_gen = generate_csv_in_app(st.session_state.api_key or None, limit_stocks=20)
                 st.session_state.generated_df = df_gen
 
                 csv_bytes = df_gen.to_csv(index=False).encode("utf-8")
