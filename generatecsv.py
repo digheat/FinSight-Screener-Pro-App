@@ -621,6 +621,7 @@ def run_full_market_inputs_with_reason(outfile="full_market_inputs_with_reason.c
             syms = syms[:limit]
 
         PREV = daily_agg_map_for_all()  # 批次昨收 + 成交量
+        syms = syms[1:4]
         total = len(syms)
         st.write(f"✅ Got {total} tickers to process | MAX_WORKERS = {max_workers}") # <-- 取代 print()
 
